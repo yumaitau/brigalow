@@ -1468,13 +1468,15 @@ async fn at_pol_01_03_and_sign_01_03_cli_https_and_tsa_fail_closed() {
         .read_line(&mut line)
         .unwrap();
     let url = format!("https://127.0.0.1:{}", line.trim());
+    // The test executable's depth under target/ depends on cargo's build-dir
+    // layout, so look for the built `brig` binary in each ancestor directory.
     let binary = std::env::current_exe()
         .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("brig");
+        .ancestors()
+        .skip(1)
+        .map(|dir| dir.join("brig"))
+        .find(|path| path.is_file())
+        .expect("build the brig binary before running this test");
     for format in ["raw", "cms"] {
         let mut command = std::process::Command::new(&binary);
         command.current_dir(d).env("BRIGALOW_TOKEN", &token).args([
