@@ -17,8 +17,8 @@ COPY crates ./crates
 COPY deploy/dev ./deploy/dev
 COPY examples ./examples
 RUN cargo build --locked -p brig -p brigalow-pkcs11 -p brigalow-server --bin brigalow-ca --bin brigalow-audit --bin brig --lib \
-    && cargo test --locked -p brigalow-server --test identity --features tool-tests --no-run \
-    && find target/debug/deps -maxdepth 1 -type f -name 'identity-*' -executable -exec cp {} /tool-tests \;
+    && cargo test --locked -p brigalow-server --test identity --features tool-tests --no-run --message-format=json > /tmp/identity.json \
+    && cp "$(grep -o '"executable":"[^"]*/identity-[^"]*"' /tmp/identity.json | cut -d'"' -f4)" /tool-tests
 FROM tools-base
 WORKDIR /work
 RUN mkdir -p /work/crates/brigalow-server
