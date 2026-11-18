@@ -1,1 +1,20 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Brigalow</title></head><body><main><h1>Brigalow</h1>{% if lab %}<p role="status">LAB MODE — test use only. Release signing unavailable.</p>{% endif %}<p>Manage projects, keys and signing requests.</p><p><a href="/orgs/{{ org }}/requests">Pending signing requests</a></p>{% if can_manage %}<form method="post" action="/orgs/{{ org }}/projects"><input type="hidden" name="csrf" value="{{ csrf }}"><label>Project name <input name="name" required maxlength="200"></label><input type="hidden" name="request_id" value="{{ request_id }}"><button type="submit">Create project</button></form>{% endif %}<form method="post" action="/orgs/{{ org }}/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Sign out</button></form></main></body></html>
+{% extends "base.html" %}
+{% block title %}Organisation · Brigalow{% endblock %}
+{% block nav %}{% let current = "home" %}{% include "_nav.html" %}<form method="post" action="/orgs/{{ org }}/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button data-slot="button" type="submit">Sign out</button></form>{% endblock %}
+{% block banner %}{% include "_lab.html" %}{% endblock %}
+{% block content %}
+<header class="page-header"><h1>Brigalow</h1><p class="muted">Manage projects, keys and signing requests.</p></header>
+<section class="panel">
+<div class="panel-header"><h2>Signing requests</h2><p class="muted">Review each digest, identity and policy before deciding.</p></div>
+<div class="actions"><a data-slot="button" data-variant="solid" href="/orgs/{{ org }}/requests">Pending signing requests</a></div>
+</section>
+{% if can_manage %}
+<section class="panel">
+<div class="panel-header"><h2>New project</h2><p class="muted">Projects group keys, policies and signing requests.</p></div>
+<form method="post" action="/orgs/{{ org }}/projects" class="stack"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="request_id" value="{{ request_id }}">
+<div data-slot="field"><label data-slot="field-label" for="project-name">Project name</label><input data-slot="input" id="project-name" name="name" required maxlength="200" autocomplete="off" aria-describedby="project-name-hint"><p data-slot="field-description" id="project-name-hint">Up to 200 characters.</p></div>
+<div class="actions"><button data-slot="button" data-variant="solid" type="submit">Create project</button></div>
+</form>
+</section>
+{% endif %}
+{% endblock %}

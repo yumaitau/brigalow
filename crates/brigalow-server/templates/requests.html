@@ -1,1 +1,10 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Pending requests — Brigalow</title></head><body><main><h1>Pending signing requests</h1>{% if lab %}<p>LAB MODE — test use only.</p>{% endif %}<p>Open each request to review its digest, identity and policy before deciding.</p><ul>{% for (id, name) in requests %}<li><a href="/orgs/{{ org }}/requests/{{ id }}">{{ name }}</a></li>{% endfor %}</ul><p><a href="/orgs/{{ org }}">Organisation</a></p></main></body></html>
+{% extends "base.html" %}
+{% block title %}Pending requests · Brigalow{% endblock %}
+{% block nav %}{% let current = "requests" %}{% include "_nav.html" %}{% endblock %}
+{% block banner %}{% include "_lab.html" %}{% endblock %}
+{% block content %}
+<header class="page-header"><h1>Pending signing requests</h1><p class="muted">Open each request to review its digest, identity and policy before deciding.</p></header>
+{% if requests.is_empty() %}<p class="empty">No requests are waiting for a decision.</p>{% else %}
+<ul class="rows">{% for (id, name) in requests %}<li><a class="row-link" href="/orgs/{{ org }}/requests/{{ id }}"><span class="row-title">{{ name }}</span><span class="mono muted">{{ id }}</span></a></li>{% endfor %}</ul>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/ui-sdk.css">
+<link rel="stylesheet" href="/static/app.css">
+{% block head %}{% endblock %}
+<title>{% block title %}Brigalow{% endblock %}</title>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner"><span class="brand">Brigalow</span>{% block nav %}{% endblock %}</div></header>
+{% block banner %}{% endblock %}
+<main class="page{% block main_class %}{% endblock %}">
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

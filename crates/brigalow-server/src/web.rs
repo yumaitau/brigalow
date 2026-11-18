@@ -545,6 +545,7 @@ pub async fn project_form(
 #[derive(Template)]
 #[template(path = "project.html")]
 struct ProjectTemplate<'a> {
+    org: Uuid,
     name: &'a str,
     lab: bool,
 }
@@ -562,6 +563,7 @@ pub async fn project_page(
         .ok_or(WebError(StatusCode::NOT_FOUND))?;
     Ok(Html(
         ProjectTemplate {
+            org,
             name: &name,
             lab: state.mode == crate::config::Mode::Lab,
         }

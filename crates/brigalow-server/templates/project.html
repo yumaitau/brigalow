@@ -1,1 +1,8 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Project · Brigalow</title></head><body><main>{% if lab %}<p role="status">LAB MODE — test use only. Release signing unavailable.</p>{% endif %}<h1>{{ name }}</h1></main></body></html>
+{% extends "base.html" %}
+{% block title %}{{ name }} · Brigalow{% endblock %}
+{% block nav %}{% let current = "" %}{% include "_nav.html" %}{% endblock %}
+{% block banner %}{% include "_lab.html" %}{% endblock %}
+{% block content %}
+<header class="page-header"><p class="eyebrow">Project</p><h1>{{ name }}</h1></header>
+<p><a class="back" href="/orgs/{{ org }}">Back to organisation</a></p>
+{% endblock %}

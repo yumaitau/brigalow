@@ -92,6 +92,8 @@ pub fn application(state: AppState) -> Router {
     }
     router
         .route("/static/htmx.js", get(approvals::htmx))
+        .route("/static/ui-sdk.css", get(approvals::ui_css))
+        .route("/static/app.css", get(approvals::app_css))
         .route("/orgs/{org}/requests", get(approvals::queue))
         .route("/orgs/{org}/requests/{id}", get(approvals::page))
         .route("/orgs/{org}/requests/{id}/decisions", post(approvals::form))

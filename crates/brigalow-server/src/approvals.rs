@@ -377,3 +377,15 @@ pub async fn htmx() -> impl IntoResponse {
         include_str!("../static/vendor/htmx-4.0.1.min.js"),
     )
 }
+pub async fn ui_css() -> impl IntoResponse {
+    (
+        [("content-type", "text/css; charset=utf-8")],
+        include_str!("../static/vendor/ui-sdk-core-0.1.0-beta.6-web.css"),
+    )
+}
+pub async fn app_css() -> impl IntoResponse {
+    (
+        [("content-type", "text/css; charset=utf-8")],
+        include_str!("../static/app.css"),
+    )
+}

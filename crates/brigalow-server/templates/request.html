@@ -1,1 +1,33 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="htmx-config" content='{"includeIndicatorCSS":false}'><script src="/static/htmx.js" defer></script><title>Signing request — Brigalow</title></head><body><main><h1>{{ artifact }}</h1>{% if lab %}<p role="status">LAB MODE — test use only. Release signing unavailable.</p>{% endif %}<dl><dt>Request</dt><dd>{{ id }}</dd><dt>Status</dt><dd>{{ status }}</dd><dt>SHA-256 digest</dt><dd><code>{{ digest }}</code></dd><dt>Policy</dt><dd>{{ policy_name }}</dd><dt>Key</dt><dd>{{ key_id }} · {{ algorithm }}</dd><dt>Trust</dt><dd>{{ trust }}</dd></dl><p>Trust tier records operator configuration. external-ca identifies an outside-CA anchor; relying platforms decide whether to trust a signature.</p><h2>Verified identity claims</h2><dl>{% for (name, value) in claims %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl><h2>Submitter metadata (unverified)</h2><dl>{% for (name, value) in metadata %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl><h2>Pre-sign gates</h2>{% if gates.is_empty() %}<p>No gates configured.</p>{% else %}<ul>{% for (name,status) in gates %}<li>{{ name }}: {{ status }}</li>{% endfor %}</ul>{% endif %}<h2>Approval</h2><p>{{ approval_summary }}</p><ul>{% for (actor, decision) in decisions %}<li>{{ actor }}: {{ decision }}</li>{% endfor %}</ul>{% if can_decide %}<form method="post" action="/orgs/{{ org }}/requests/{{ id }}/decisions" hx-boost="true"><input type="hidden" name="csrf" value="{{ csrf }}"><button name="decision" value="approve" type="submit">Approve this request</button><button name="decision" value="deny" type="submit">Deny this request</button></form>{% endif %}<p><a href="/orgs/{{ org }}/requests">Pending requests</a></p></main></body></html>
+{% extends "base.html" %}
+{% block head %}<meta name="htmx-config" content='{"includeIndicatorCSS":false}'><script src="/static/htmx.js" defer></script>{% endblock %}
+{% block title %}{{ artifact }} · Signing request · Brigalow{% endblock %}
+{% block nav %}{% let current = "requests" %}{% include "_nav.html" %}{% endblock %}
+{% block banner %}{% include "_lab.html" %}{% endblock %}
+{% block content %}
+<header class="page-header"><p class="eyebrow">Signing request</p><div class="page-header-row"><h1>{{ artifact }}</h1><span class="badge"{% if status == "awaiting_approval" %} data-tone="warn"{% endif %}>{{ status }}</span></div></header>
+<section class="panel" aria-labelledby="details-heading">
+<h2 id="details-heading">Request</h2>
+<dl class="details"><dt>Request</dt><dd class="mono">{{ id }}</dd><dt>Status</dt><dd>{{ status }}</dd><dt>SHA-256 digest</dt><dd><code class="digest">{{ digest }}</code></dd><dt>Policy</dt><dd>{{ policy_name }}</dd><dt>Key</dt><dd><span class="mono">{{ key_id }}</span> · {{ algorithm }}</dd><dt>Trust</dt><dd>{{ trust }}</dd></dl>
+<p class="muted">Trust tier records operator configuration. external-ca identifies an outside-CA anchor; relying platforms decide whether to trust a signature.</p>
+</section>
+<div class="grid-2">
+<section class="panel" aria-labelledby="claims-heading">
+<div class="panel-header"><h2 id="claims-heading">Verified identity claims</h2><p class="muted">Checked by Brigalow against the identity provider.</p></div>
+{% if claims.is_empty() %}<p class="muted">None.</p>{% else %}<dl class="details">{% for (name, value) in claims %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
+</section>
+<section class="panel panel-unverified" aria-labelledby="metadata-heading">
+<div class="panel-header"><h2 id="metadata-heading">Submitter metadata (unverified)</h2><p class="muted">Supplied by the submitter. Do not rely on it.</p></div>
+{% if metadata.is_empty() %}<p class="muted">None.</p>{% else %}<dl class="details">{% for (name, value) in metadata %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
+</section>
+</div>
+<section class="panel" aria-labelledby="gates-heading">
+<h2 id="gates-heading">Pre-sign gates</h2>
+{% if gates.is_empty() %}<p class="muted">No gates configured.</p>{% else %}<ul class="rows">{% for (name,status) in gates %}<li><span class="row-title">{{ name }}</span><span class="badge"{% if status == "Passed" %} data-tone="ok"{% else if status.starts_with("Failed") %} data-tone="bad"{% endif %}>{{ status }}</span></li>{% endfor %}</ul>{% endif %}
+</section>
+<section class="panel" aria-labelledby="approval-heading">
+<div class="panel-header"><h2 id="approval-heading">Approval</h2><p class="muted">{{ approval_summary }}</p></div>
+{% if !decisions.is_empty() %}<ul class="rows">{% for (actor, decision) in decisions %}<li><span class="mono">{{ actor }}</span><span class="badge"{% if decision.starts_with("Approved") %} data-tone="ok"{% else %} data-tone="bad"{% endif %}>{{ decision }}</span></li>{% endfor %}</ul>{% endif %}
+{% if can_decide %}<form method="post" action="/orgs/{{ org }}/requests/{{ id }}/decisions" hx-boost="true" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}"><button data-slot="button" data-variant="solid" name="decision" value="approve" type="submit">Approve this request</button><button data-slot="button" data-variant="destructive" name="decision" value="deny" type="submit">Deny this request</button></form>{% endif %}
+</section>
+<p><a class="back" href="/orgs/{{ org }}/requests">Back to pending requests</a></p>
+{% endblock %}
