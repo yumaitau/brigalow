@@ -94,7 +94,8 @@ pub fn verify(
         .decode_as()
         .map_err(error)?;
     let info = TstInfo::from_der(content.as_bytes()).map_err(error)?;
-    if info.message_imprint != request.message_imprint
+    if info.version != TspVersion::V1
+        || info.message_imprint != request.message_imprint
         || info.nonce != request.nonce
         || info.gen_time.to_unix_duration().as_secs().abs_diff(now) > 300
         || info.extensions.is_some()
@@ -109,6 +110,15 @@ pub fn verify(
         .ok_or(Error::Certificate)?;
     if !critical || eku.0 != vec![oid("1.3.6.1.5.5.7.3.8")] {
         return Err(Error::Certificate);
+    }
+    if let Some((_, usage)) = cert
+        .tbs_certificate
+        .get::<x509_cert::ext::pkix::KeyUsage>()
+        .map_err(error)?
+    {
+        if !usage.digital_signature() {
+            return Err(Error::Certificate);
+        }
     }
     let signer = data.signer_infos.0.get(0).ok_or(Error::Certificate)?;
     if signer.sid
@@ -257,7 +267,13 @@ impl Client {
                 .headers()
                 .get("content-type")
                 .and_then(|s| s.to_str().ok())
-                .is_none_or(|s| s.split(';').next() != Some("application/timestamp-reply"))
+                .is_none_or(|s| {
+                    !s.split(';')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .eq_ignore_ascii_case("application/timestamp-reply")
+                })
         {
             return Err(Error::Certificate);
         }
@@ -276,7 +292,13 @@ impl Client {
 /// Decode helper for offline consumers; never substitutes for `verify`.
 pub fn token_info(token: &[u8]) -> Result<TstInfo> {
     let token = ContentInfo::from_der(token).map_err(|_| Error::Certificate)?;
+    if token.content_type != oid("1.2.840.113549.1.7.2") {
+        return Err(Error::Certificate);
+    }
     let data: SignedData = token.content.decode_as().map_err(|_| Error::Certificate)?;
+    if data.encap_content_info.econtent_type != oid("1.2.840.113549.1.9.16.1.4") {
+        return Err(Error::Certificate);
+    }
     let content: OctetString = data
         .encap_content_info
         .econtent

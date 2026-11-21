@@ -1,9 +1,9 @@
-//! Core domain types for Brigalow. No I/O lives in this crate.
-//!
-//! This is a scaffold. See `docs/architecture.md` for the planned modules.
+//! Core domain types, policy evaluation, approval state machine and audit chain.
+//! No I/O lives in this crate.
 
 pub mod approvals;
 pub mod audit;
+pub mod gates;
 pub mod keys;
 pub mod policy;
 pub mod rbac;
@@ -48,5 +48,3 @@ mod tests {
         assert!(purpose_compatible(Purpose::Release, Purpose::Release));
     }
 }
-
-pub mod gates;

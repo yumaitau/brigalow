@@ -62,6 +62,11 @@ impl Policy {
                 .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
             && !self.algorithms.is_empty()
             && self.algorithms.len() <= 3
+            && self
+                .algorithms
+                .iter()
+                .enumerate()
+                .all(|(i, a)| !self.algorithms[..i].contains(a))
             && self.claims.len() <= 16
             && self
                 .claims
@@ -133,7 +138,7 @@ impl Submission {
             && self
                 .metadata
                 .iter()
-                .all(|(k, v)| k.len() <= 100 && v.len() <= 1024)
+                .all(|(k, v)| !k.is_empty() && k.len() <= 100 && v.len() <= 1024)
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -182,5 +187,43 @@ impl RequestState {
             Self::AwaitingApproval => "awaiting_approval",
             Self::Expired => "expired",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_duplicate_algorithms_and_empty_metadata_keys() {
+        let mut policy = Policy {
+            id: Uuid::new_v4(),
+            name: "test".into(),
+            project: Uuid::new_v4(),
+            key: Uuid::new_v4(),
+            purpose: Purpose::Test,
+            claims: BTreeMap::new(),
+            algorithms: vec![Algorithm::P256, Algorithm::P256],
+            timestamp: Timestamp::Disabled,
+            approval: None,
+            gates: vec![],
+            attestation: false,
+        };
+        assert!(!policy.valid());
+        policy.algorithms = vec![Algorithm::P256, Algorithm::Rsa3072];
+        assert!(policy.valid());
+
+        let mut submission = Submission {
+            request_id: Uuid::new_v4(),
+            policy: policy.id,
+            digest_alg: DigestAlgorithm::Sha256,
+            digest: [0; 32],
+            artifact_name: "artifact.bin".into(),
+            format: Format::Raw,
+            metadata: BTreeMap::from([("".into(), "v".into())]),
+        };
+        assert!(!submission.valid());
+        submission.metadata = BTreeMap::from([("k".into(), "v".into())]);
+        assert!(submission.valid());
     }
 }

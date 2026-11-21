@@ -73,9 +73,6 @@ impl Approval {
         if self.decisions.values().any(|d| *d == Decision::Deny) {
             return Status::Denied;
         }
-        if now >= self.expires_at {
-            return Status::Expired;
-        }
         if self
             .decisions
             .values()
@@ -83,10 +80,12 @@ impl Approval {
             .count()
             >= usize::from(self.rule.required)
         {
-            Status::Approved
-        } else {
-            Status::Pending
+            return Status::Approved;
         }
+        if now >= self.expires_at {
+            return Status::Expired;
+        }
+        Status::Pending
     }
     pub fn may_decide(&self, p: &Principal, now: i64) -> bool {
         self.status(now) == Status::Pending
@@ -153,6 +152,11 @@ mod tests {
             Err(Error::Duplicate)
         );
         assert_eq!(a.decide(&bob, Decision::Approve, 102), Ok(Status::Approved));
+        assert_eq!(a.status(220), Status::Approved);
+        assert_eq!(
+            a.decide(&p("c", vec![Role::Approver]), Decision::Approve, 220),
+            Err(Error::Closed)
+        );
         let mut a = approval();
         a.decide(&alice, Decision::Approve, 101).unwrap();
         assert_eq!(a.decide(&bob, Decision::Deny, 102), Ok(Status::Denied));

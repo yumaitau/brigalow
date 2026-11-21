@@ -441,6 +441,15 @@ fn exercise(backend: &dyn KeyBackend) {
             now
         )
         .is_err());
+    assert!(ca
+        .issue(
+            &backend.public_key(&first).unwrap(),
+            &[0; 16],
+            &profile,
+            now
+        )
+        .is_err());
+    assert!(ca.crl(2, &[([0; 16], now)], now).is_err());
     let untrusted =
         Issuer::new(backend, &ca_key, vec![intermediate], vec![chain[0].clone()]).unwrap();
     assert!(untrusted

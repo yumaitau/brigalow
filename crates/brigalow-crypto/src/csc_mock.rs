@@ -36,12 +36,20 @@ pub struct CscMock {
 }
 impl CscMock {
     pub fn new(origin: &str, ca_pem: &[u8], token: String, bindings: Vec<Binding>) -> Result<Self> {
+        let token = Zeroizing::new(token);
         let url = reqwest::Url::parse(origin).map_err(|_| Error::Backend)?;
+        let is_loopback = url
+            .host_str()
+            .and_then(|h| {
+                let raw = h
+                    .strip_prefix('[')
+                    .and_then(|s| s.strip_suffix(']'))
+                    .unwrap_or(h);
+                raw.parse::<std::net::IpAddr>().ok()
+            })
+            .is_some_and(|a| a.is_loopback());
         if url.scheme() != "https"
-            || !url
-                .host_str()
-                .and_then(|h| h.parse::<std::net::IpAddr>().ok())
-                .is_some_and(|a| a.is_loopback())
+            || !is_loopback
             || !url.username().is_empty()
             || url.password().is_some()
             || url.query().is_some()
@@ -67,7 +75,7 @@ impl CscMock {
             .map_err(|_| Error::Backend)?;
         let mut remote = Self {
             origin: origin.trim_end_matches('/').into(),
-            token: Zeroizing::new(token),
+            token,
             client,
             records: BTreeMap::new(),
             disabled: Mutex::new(BTreeSet::new()),

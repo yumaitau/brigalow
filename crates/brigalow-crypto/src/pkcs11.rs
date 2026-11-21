@@ -18,6 +18,7 @@ pub struct Hsm {
 impl Hsm {
     /// Never initialise/reset an operator token here. Select its exact label and log in.
     pub fn open(module: &Path, label: &str, pin: String) -> Result<Self> {
+        let pin = AuthPin::new(pin.into());
         let context = Pkcs11::new(module).map_err(|_| Error::Backend)?;
         context
             .initialize(CInitializeArgs::new(CInitializeFlags::OS_LOCKING_OK))
@@ -38,7 +39,7 @@ impl Hsm {
             .open_rw_session(matching[0])
             .map_err(|_| Error::Backend)?;
         session
-            .login(UserType::User, Some(&AuthPin::new(pin.into())))
+            .login(UserType::User, Some(&pin))
             .map_err(|_| Error::Backend)?;
         Ok(Self {
             session: Mutex::new(session),
@@ -67,7 +68,7 @@ impl Hsm {
             .map_err(|_| Error::Backend)?;
         Ok((
             attributes.contains(&Attribute::Sensitive(true)),
-            attributes.contains(&Attribute::Extractable(true)),
+            !attributes.contains(&Attribute::Extractable(false)),
         ))
     }
 }
@@ -171,16 +172,22 @@ impl KeyBackend for Hsm {
                         }
                     })
                     .ok_or(Error::Backend)?;
-                PublicKey::new(
-                    BoxedUint::from_be_slice(n, (n.len() * 8) as u32)
-                        .map_err(|_| Error::Backend)?,
-                    BoxedUint::from_be_slice(e, (e.len() * 8) as u32)
-                        .map_err(|_| Error::Backend)?,
+                let n_bits = u32::try_from(n.len().checked_mul(8).ok_or(Error::Backend)?)
+                    .map_err(|_| Error::Backend)?;
+                let e_bits = u32::try_from(e.len().checked_mul(8).ok_or(Error::Backend)?)
+                    .map_err(|_| Error::Backend)?;
+                let rsa = PublicKey::new(
+                    BoxedUint::from_be_slice(n, n_bits).map_err(|_| Error::Backend)?,
+                    BoxedUint::from_be_slice(e, e_bits).map_err(|_| Error::Backend)?,
                 )
-                .map_err(|_| Error::Backend)?
-                .to_public_key_der()
-                .map(|d| d.as_bytes().to_vec())
-                .map_err(|_| Error::Backend)
+                .map_err(|_| Error::Backend)?;
+                use rsa::traits::PublicKeyParts;
+                if rsa.n().bit_width() != 3072 {
+                    return Err(Error::Algorithm);
+                }
+                rsa.to_public_key_der()
+                    .map(|d| d.as_bytes().to_vec())
+                    .map_err(|_| Error::Backend)
             }
             Algorithm::P256 => {
                 let a = s

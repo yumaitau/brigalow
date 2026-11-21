@@ -137,6 +137,9 @@ impl<'a> Issuer<'a> {
         profile: &Profile,
         at: u64,
     ) -> Result<Vec<Vec<u8>>> {
+        if serial.iter().all(|&b| b == 0) {
+            return Err(Error::Certificate);
+        }
         profile.validate()?;
         validate_public_key(public_key)?;
         let expires = at.checked_add(LEAF_SECONDS).ok_or(Error::Certificate)?;
@@ -219,7 +222,12 @@ impl<'a> Issuer<'a> {
     }
     /// Revocation input comes only from the committed CA ledger. CRLs expire after one day.
     pub fn crl(&self, number: u64, revoked: &[([u8; 16], u64)], at: u64) -> Result<Vec<u8>> {
-        if revoked.len() > 100_000 || number == 0 || revoked.iter().any(|(_, t)| *t > at) {
+        if revoked.len() > 100_000
+            || number == 0
+            || revoked
+                .iter()
+                .any(|(s, t)| *t > at || s.iter().all(|&b| b == 0))
+        {
             return Err(Error::Certificate);
         }
         let validity = &self.certificate.tbs_certificate.validity;
