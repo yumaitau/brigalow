@@ -256,7 +256,11 @@ async fn produce(
         return Err(Error::Unavailable);
     }
     // Revalidate certificate expiry/path before producing each certificate-bearing signature.
-    if !key.chain.is_empty() {
+    if key.chain.is_empty() {
+        if policy.purpose == Purpose::Release {
+            return Err(Error::Certificate);
+        }
+    } else {
         let roots: Vec<_> = service.anchors.iter().map(|a| a.der.clone()).collect();
         let trust = certificates::validate_chain(
             &key.public_key,

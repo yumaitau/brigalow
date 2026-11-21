@@ -1,4 +1,19 @@
 use super::*;
+
+fn claim_matches(value: Option<&serde_json::Value>, expected: &str) -> bool {
+    match value {
+        Some(serde_json::Value::String(s)) => s == expected,
+        Some(serde_json::Value::Bool(b)) => (if *b { "true" } else { "false" }) == expected,
+        _ => false,
+    }
+}
+
+fn rule_matches(rule: &WorkloadRule, claims: &serde_json::Value) -> bool {
+    rule.claims
+        .iter()
+        .all(|(k, v)| claim_matches(claims.get(k), v))
+}
+
 impl Identity {
     /// Diagnostic only: reverify before naming a failed configured claim in the audit log.
     pub async fn rejected_claim(
@@ -23,7 +38,7 @@ impl Identity {
             let (name, _) = rule
                 .claims
                 .iter()
-                .find(|(k, v)| claims.get(*k).and_then(|c| c.as_str()) != Some(v.as_str()))?;
+                .find(|(k, v)| !claim_matches(claims.get(*k), v))?;
             let p = Self::principal(a, &claims, vec![], None, false).ok()?;
             return Some((p.actor, name.clone()));
         }
@@ -35,7 +50,11 @@ impl Identity {
         token: &str,
         scope: &Scope,
     ) -> Result<Principal, AuthError> {
-        self.verify_workload(org, token, Some(scope)).await
+        let principal = self.verify_workload(org, token, Some(scope)).await?;
+        if !principal.permits_scope(scope.project, Some(scope.policy)) {
+            return Err(AuthError);
+        }
+        Ok(principal)
     }
     pub async fn verify_workload(
         &self,
@@ -63,18 +82,20 @@ impl Identity {
         let issued = claims["iat"].as_i64().ok_or(AuthError)?;
         let expires = claims["exp"].as_i64().ok_or(AuthError)?;
         let lifetime = expires.checked_sub(issued).ok_or(AuthError)?;
-        if issued > now() + 30 || !(1..=3600).contains(&lifetime) {
+        if issued < 0 || issued > now() + 30 || !(1..=3600).contains(&lifetime) {
             return Err(AuthError);
         }
-        let rule = a
-            .workloads
-            .iter()
-            .find(|r| {
-                scope.is_none_or(|scope| r.project == scope.project && r.policy == scope.policy)
-                    && r.claims
-                        .iter()
-                        .all(|(k, v)| claims.get(k).and_then(|c| c.as_str()) == Some(v.as_str()))
+        // Prefer the rule matching the target scope; fall back to any matching rule so
+        // callers return a uniform 404 via permits_scope rather than leaking existence via 401.
+        let rule = scope
+            .and_then(|scope| {
+                a.workloads.iter().find(|r| {
+                    r.project == scope.project
+                        && r.policy == scope.policy
+                        && rule_matches(r, &claims)
+                })
             })
+            .or_else(|| a.workloads.iter().find(|r| rule_matches(r, &claims)))
             .ok_or(AuthError)?;
         Self::principal(
             a,
@@ -86,5 +107,42 @@ impl Identity {
             }),
             false,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workload_claim_matching_accepts_strings_and_booleans() {
+        assert!(claim_matches(
+            Some(&serde_json::json!("acme/app")),
+            "acme/app"
+        ));
+        assert!(claim_matches(Some(&serde_json::json!(true)), "true"));
+        assert!(claim_matches(Some(&serde_json::json!(false)), "false"));
+        assert!(!claim_matches(Some(&serde_json::json!(false)), "true"));
+        assert!(!claim_matches(Some(&serde_json::json!(1)), "1"));
+        assert!(!claim_matches(None, "true"));
+    }
+
+    #[test]
+    fn identity_rejects_public_url_with_query_or_path() {
+        for bad in [
+            "https://brigalow.test/?x=1",
+            "https://brigalow.test/prefix",
+            "http://brigalow.test",
+        ] {
+            assert!(Identity::new(
+                IdentityConfig {
+                    public_url: bad.into(),
+                    ca_file: None,
+                    authorities: vec![],
+                },
+                Mode::Lab
+            )
+            .is_err());
+        }
     }
 }

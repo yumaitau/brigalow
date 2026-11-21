@@ -135,7 +135,9 @@ pub async fn generate(
     };
     if let Err(e) = tenant.insert_key(&p.actor, &record, remote).await {
         if !remote {
-            let _ = service.backend.disable(&record.key);
+            let backend = service.backend.clone();
+            let key = record.key.clone();
+            let _ = tokio::task::spawn_blocking(move || backend.disable(&key)).await;
         }
         return Err(e.into());
     }
@@ -189,27 +191,26 @@ pub async fn mutate(
                 return Err(WebError(StatusCode::CONFLICT));
             }
             let chain = input.chain.ok_or(WebError(StatusCode::BAD_REQUEST))?;
-            let mut trust = certificates::validate_chain(
-                &record.public_key,
-                &chain,
-                &[],
-                crate::auth::now() as u64,
-            )
-            .map_err(crypto)?;
+            let at = crate::auth::now() as u64;
+            let all_roots: Vec<_> = service.anchors.iter().map(|a| a.der.clone()).collect();
+            let mut trust =
+                certificates::validate_chain(&record.public_key, &chain, &all_roots, at)
+                    .map_err(crypto)?;
             record.anchor = None;
-            for anchor in &service.anchors {
-                if certificates::validate_chain(
-                    &record.public_key,
-                    &chain,
-                    std::slice::from_ref(&anchor.der),
-                    crate::auth::now() as u64,
-                )
-                .map_err(crypto)?
-                    == TrustTier::Private
-                {
-                    trust = anchor.tier;
-                    record.anchor = Some(anchor.name.clone());
-                    break;
+            if trust == TrustTier::Private {
+                for anchor in &service.anchors {
+                    if certificates::validate_chain(
+                        &record.public_key,
+                        &chain,
+                        std::slice::from_ref(&anchor.der),
+                        at,
+                    )
+                    .is_ok_and(|tier| tier == TrustTier::Private)
+                    {
+                        trust = anchor.tier;
+                        record.anchor = Some(anchor.name.clone());
+                        break;
+                    }
                 }
             }
             record.trust = if service.backend.is_lab() {
@@ -226,7 +227,13 @@ pub async fn mutate(
                 return Err(WebError(StatusCode::CONFLICT));
             }
             // Resolve the persistent backend object before granting signing authority.
-            if service.backend.public_key(&record.key).map_err(crypto)? != record.public_key {
+            let backend = service.backend.clone();
+            let key = record.key.clone();
+            let public = tokio::task::spawn_blocking(move || backend.public_key(&key))
+                .await
+                .map_err(|_| WebError(StatusCode::INTERNAL_SERVER_ERROR))?
+                .map_err(crypto)?;
+            if public != record.public_key {
                 return Err(WebError(StatusCode::CONFLICT));
             }
             "key.activated"
@@ -249,7 +256,12 @@ pub async fn mutate(
     tenant.update_key(&p.actor, action, &record).await?;
     // DB authority is revoked first. A backend error cannot leave signing enabled in Brigalow.
     if matches!(operation, Operation::Disable | Operation::Retire) {
-        service.backend.disable(&record.key).map_err(crypto)?;
+        let backend = service.backend.clone();
+        let key = record.key.clone();
+        tokio::task::spawn_blocking(move || backend.disable(&key))
+            .await
+            .map_err(|_| WebError(StatusCode::INTERNAL_SERVER_ERROR))?
+            .map_err(crypto)?;
     }
     record.revision += 1;
     Ok(Json(serde_json::to_value(record).map_err(|_| {

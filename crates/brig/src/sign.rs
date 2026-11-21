@@ -87,18 +87,21 @@ pub async fn run(args: &[OsString]) -> Result<(), &'static str> {
     let project: Uuid = required("--project")?
         .parse()
         .map_err(|_| "invalid project")?;
-    let mut base = reqwest::Url::parse(required("--server")?).map_err(|_| "invalid server URL")?;
+    let base = reqwest::Url::parse(required("--server")?).map_err(|_| "invalid server URL")?;
     if base.scheme() != "https"
         || base.host_str().is_none()
         || !base.username().is_empty()
         || base.password().is_some()
+        || base.path() != "/"
         || base.query().is_some()
         || base.fragment().is_some()
     {
-        return Err("server requires HTTPS without URL credentials");
+        return Err("server requires HTTPS origin without path or URL credentials");
     }
-    base.set_path("/");
     let token = std::env::var("BRIGALOW_TOKEN").map_err(|_| "BRIGALOW_TOKEN required")?;
+    if token.is_empty() {
+        return Err("BRIGALOW_TOKEN must not be empty");
+    }
     let mut builder = reqwest::Client::builder()
         .https_only(true)
         .no_proxy()
@@ -143,6 +146,14 @@ pub async fn run(args: &[OsString]) -> Result<(), &'static str> {
     .map_err(|_| "invalid policy response")?;
     if policy.project != project {
         return Err("policy does not belong to project");
+    }
+    let output = PathBuf::from(required("--output")?);
+    if output.exists()
+        || (policy.timestamp != brigalow_core::policy::Timestamp::Disabled
+            && PathBuf::from(format!("{}.tsr", output.display())).exists())
+        || (policy.attestation && PathBuf::from(format!("{}.dsse.json", output.display())).exists())
+    {
+        return Err("output already exists");
     }
     let format = match options.get("--format").copied().unwrap_or("raw") {
         "raw" => Format::Raw,
@@ -223,7 +234,6 @@ pub async fn run(args: &[OsString]) -> Result<(), &'static str> {
     {
         return Err("signature response does not match request");
     }
-    let output = PathBuf::from(required("--output")?);
     let signature = result.output.ok_or("signature missing")?;
     let mut files = vec![];
     if let Some(token) = result.timestamp {

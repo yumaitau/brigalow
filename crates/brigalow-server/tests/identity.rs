@@ -475,6 +475,32 @@ async fn at_id_02_workload_claims_and_at_id_03_expiry_rechecked() {
         .0,
         200
     );
+    // Out-of-scope existing policies and nonexistent policies both return uniform 404 (no 401 oracle).
+    let other_policy = Uuid::new_v4();
+    sqlx::query("INSERT INTO brigalow.policies (org_id,id,project_id,key_id) VALUES ($1,$2,$3,$4)")
+        .bind(org)
+        .bind(other_policy)
+        .bind(f.objects[0][0])
+        .bind(f.objects[0][1])
+        .execute(&f.admin)
+        .await
+        .unwrap();
+    for probe in [other_policy, Uuid::new_v4()] {
+        assert_eq!(
+            request(
+                &f,
+                "GET",
+                &format!("/v1/orgs/{org}/policies/{probe}"),
+                None,
+                Some(&valid),
+                None,
+                Value::Null
+            )
+            .await
+            .0,
+            404
+        );
+    }
     for (field, value) in [
         ("iss", json!("https://unknown.invalid")),
         ("aud", json!("wrong")),
@@ -2047,6 +2073,18 @@ async fn at_apr_01_03_and_rel_01_02_individual_decisions_and_atomic_caps() {
     let expires: SignRequest = serde_json::from_str(&result.2).unwrap();
     let expiry_id = expires.submission.request_id;
     tokio::time::sleep(std::time::Duration::from_millis(2100)).await;
+    // Unauthorized caller deciding an expired request still receives 403 without mutating state.
+    assert_eq!(
+        json_as(
+            &f,
+            &format!("/v1/orgs/{org}/requests/{expiry_id}/decisions"),
+            &requester,
+            json!({"decision":"approve"})
+        )
+        .await
+        .0,
+        403
+    );
     let result = request(
         &f,
         "GET",

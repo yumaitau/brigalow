@@ -447,7 +447,7 @@ pub async fn complete(
         header::SET_COOKIE,
         format!(
             "__Host-brigalow={org}.{token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age={}",
-            expires - auth::now()
+            (expires - auth::now()).max(0)
         )
         .parse()
         .map_err(|_| WebError(StatusCode::INTERNAL_SERVER_ERROR))?,
@@ -475,6 +475,9 @@ pub async fn home(
     headers: HeaderMap,
 ) -> Result<Html<String>> {
     let credential = session(&state, &headers, org).await?;
+    if !credential.principal.allows(Action::Read) {
+        return Err(WebError(StatusCode::FORBIDDEN));
+    }
     Ok(Html(
         HomeTemplate {
             request_id: Uuid::new_v4(),
@@ -554,7 +557,10 @@ pub async fn project_page(
     Path((org, id)): Path<(Uuid, Uuid)>,
     headers: HeaderMap,
 ) -> Result<Html<String>> {
-    session(&state, &headers, org).await?;
+    let credential = session(&state, &headers, org).await?;
+    if !credential.principal.allows(Action::Read) {
+        return Err(WebError(StatusCode::FORBIDDEN));
+    }
     let name = state
         .store
         .tenant(org)

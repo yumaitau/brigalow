@@ -113,6 +113,7 @@ async fn run() -> Result<(), &'static str> {
         let store = store.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
                 for org in &orgs {

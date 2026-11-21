@@ -4,7 +4,7 @@
 {% block nav %}{% let current = "requests" %}{% include "_nav.html" %}{% endblock %}
 {% block banner %}{% include "_lab.html" %}{% endblock %}
 {% block content %}
-<header class="page-header"><p class="eyebrow">Signing request</p><div class="page-header-row"><h1>{{ artifact }}</h1><span class="badge"{% if status == "awaiting_approval" %} data-tone="warn"{% endif %}>{{ status }}</span></div></header>
+<header class="page-header"><p class="eyebrow">Signing request</p><div class="page-header-row"><h1>{{ artifact }}</h1><span class="badge"{% if status == "awaiting_approval" %} data-tone="warn"{% else if status == "signed" %} data-tone="ok"{% else if status == "rejected" || status == "failed" || status == "expired" %} data-tone="bad"{% endif %}>{{ status }}</span></div></header>
 <section class="panel" aria-labelledby="details-heading">
 <h2 id="details-heading">Request</h2>
 <dl class="details"><dt>Request</dt><dd class="mono">{{ id }}</dd><dt>Status</dt><dd>{{ status }}</dd><dt>SHA-256 digest</dt><dd><code class="digest">{{ digest }}</code></dd><dt>Policy</dt><dd>{{ policy_name }}</dd><dt>Key</dt><dd><span class="mono">{{ key_id }}</span> · {{ algorithm }}</dd><dt>Trust</dt><dd>{{ trust }}</dd></dl>

@@ -86,12 +86,11 @@ impl Identity {
                     && u.fragment().is_none()
             })
         }
+        let public = url::Url::parse(&config.public_url).map_err(|_| AuthError)?;
         if !valid(&config.public_url)
             || config.authorities.len() > 100
-            || url::Url::parse(&config.public_url)
-                .map_err(|_| AuthError)?
-                .path()
-                != "/"
+            || public.path() != "/"
+            || public.query().is_some()
         {
             return Err(AuthError);
         }
@@ -164,11 +163,13 @@ impl Identity {
     }
     async fn jwks(&self, a: &Authority) -> Result<serde_json::Value, AuthError> {
         // Fixed issuer set bounds cache cardinality. Unknown kid does not bypass the TTL.
-        let mut cache = self.keys.lock().await;
         let key = (a.org_id, a.name.clone());
-        if let Some(entry) = cache.get(&key) {
-            if entry.expires > Instant::now() {
-                return Ok(entry.value.clone());
+        {
+            let cache = self.keys.lock().await;
+            if let Some(entry) = cache.get(&key) {
+                if entry.expires > Instant::now() {
+                    return Ok(entry.value.clone());
+                }
             }
         }
         let value = Self::json_response(
@@ -186,7 +187,7 @@ impl Identity {
         if keys.is_empty() || keys.len() > 32 {
             return Err(AuthError);
         }
-        cache.insert(
+        self.keys.lock().await.insert(
             key,
             CachedKeys {
                 expires: Instant::now() + Duration::from_secs(60),

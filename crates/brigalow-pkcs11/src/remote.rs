@@ -47,17 +47,17 @@ impl Remote {
                 .map_err(|_| ())?,
         )
         .map_err(|_| ())?;
-        let mut url = reqwest::Url::parse(&config.server).map_err(|_| ())?;
+        let url = reqwest::Url::parse(&config.server).map_err(|_| ())?;
         if url.scheme() != "https"
             || url.host_str().is_none()
             || !url.username().is_empty()
             || url.password().is_some()
+            || url.path() != "/"
             || url.query().is_some()
             || url.fragment().is_some()
         {
             return Err(());
         }
-        url.set_path("/");
         let config = Config {
             server: url.to_string().trim_end_matches('/').to_string(),
             ..config

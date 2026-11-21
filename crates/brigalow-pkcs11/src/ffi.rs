@@ -173,13 +173,13 @@ pub unsafe extern "C" fn C_GetSlotList(
 #[no_mangle]
 pub unsafe extern "C" fn C_GetSlotInfo(slot: CK_SLOT_ID, out: *mut CK_SLOT_INFO) -> CK_RV {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if out.is_null() {
-            return CKR_ARGUMENTS_BAD;
-        }
-        if slot != 1 {
-            return CKR_SLOT_ID_INVALID;
-        }
         state(|_| {
+            if out.is_null() {
+                return CKR_ARGUMENTS_BAD;
+            }
+            if slot != 1 {
+                return CKR_SLOT_ID_INVALID;
+            }
             *out = CK_SLOT_INFO {
                 slotDescription: padded("Brigalow policy-bound signing"),
                 manufacturerID: padded("Brigalow"),
@@ -195,13 +195,18 @@ pub unsafe extern "C" fn C_GetSlotInfo(slot: CK_SLOT_ID, out: *mut CK_SLOT_INFO)
 #[no_mangle]
 pub unsafe extern "C" fn C_GetTokenInfo(slot: CK_SLOT_ID, out: *mut CK_TOKEN_INFO) -> CK_RV {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if out.is_null() {
-            return CKR_ARGUMENTS_BAD;
-        }
-        if slot != 1 {
-            return CKR_SLOT_ID_INVALID;
-        }
         state(|s| {
+            if out.is_null() {
+                return CKR_ARGUMENTS_BAD;
+            }
+            if slot != 1 {
+                return CKR_SLOT_ID_INVALID;
+            }
+            let rw_sessions = s
+                .sessions
+                .values()
+                .filter(|x| x.flags & CKF_RW_SESSION != 0)
+                .count() as CK_ULONG;
             *out = CK_TOKEN_INFO {
                 label: padded("Brigalow"),
                 manufacturerID: padded("Brigalow"),
@@ -216,7 +221,7 @@ pub unsafe extern "C" fn C_GetTokenInfo(slot: CK_SLOT_ID, out: *mut CK_TOKEN_INF
                 ulMaxSessionCount: 64,
                 ulSessionCount: s.sessions.len() as CK_ULONG,
                 ulMaxRwSessionCount: 64,
-                ulRwSessionCount: s.sessions.len() as CK_ULONG,
+                ulRwSessionCount: rw_sessions,
                 ulMaxPinLen: 0,
                 ulMinPinLen: 0,
                 ulTotalPublicMemory: CK_UNAVAILABLE_INFORMATION,
@@ -239,10 +244,12 @@ pub unsafe extern "C" fn C_GetMechanismList(
     count: *mut CK_ULONG,
 ) -> CK_RV {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if slot != 1 {
-            return CKR_SLOT_ID_INVALID;
-        }
-        state(|_| output(out, count, &[CKM_RSA_PKCS, CKM_SHA256_RSA_PKCS]))
+        state(|_| {
+            if slot != 1 {
+                return CKR_SLOT_ID_INVALID;
+            }
+            output(out, count, &[CKM_RSA_PKCS, CKM_SHA256_RSA_PKCS])
+        })
     }))
     .unwrap_or(CKR_GENERAL_ERROR)
 }
@@ -253,16 +260,16 @@ pub unsafe extern "C" fn C_GetMechanismInfo(
     out: *mut CK_MECHANISM_INFO,
 ) -> CK_RV {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if out.is_null() {
-            return CKR_ARGUMENTS_BAD;
-        }
-        if slot != 1 {
-            return CKR_SLOT_ID_INVALID;
-        }
-        if ![CKM_RSA_PKCS, CKM_SHA256_RSA_PKCS].contains(&mechanism) {
-            return CKR_MECHANISM_INVALID;
-        }
         state(|_| {
+            if out.is_null() {
+                return CKR_ARGUMENTS_BAD;
+            }
+            if slot != 1 {
+                return CKR_SLOT_ID_INVALID;
+            }
+            if ![CKM_RSA_PKCS, CKM_SHA256_RSA_PKCS].contains(&mechanism) {
+                return CKR_MECHANISM_INVALID;
+            }
             *out = CK_MECHANISM_INFO {
                 ulMinKeySize: 3072,
                 ulMaxKeySize: 3072,
@@ -282,16 +289,16 @@ pub unsafe extern "C" fn C_OpenSession(
     out: *mut CK_SESSION_HANDLE,
 ) -> CK_RV {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if out.is_null() {
-            return CKR_ARGUMENTS_BAD;
-        }
-        if slot != 1 {
-            return CKR_SLOT_ID_INVALID;
-        }
-        if flags & CKF_SERIAL_SESSION == 0 {
-            return CKR_SESSION_PARALLEL_NOT_SUPPORTED;
-        }
         state(|s| {
+            if out.is_null() {
+                return CKR_ARGUMENTS_BAD;
+            }
+            if slot != 1 {
+                return CKR_SLOT_ID_INVALID;
+            }
+            if flags & CKF_SERIAL_SESSION == 0 {
+                return CKR_SESSION_PARALLEL_NOT_SUPPORTED;
+            }
             if s.sessions.len() >= 64 || s.next == CK_SESSION_HANDLE::MAX {
                 return CKR_SESSION_COUNT;
             }
@@ -327,10 +334,10 @@ pub unsafe extern "C" fn C_CloseSession(session: CK_SESSION_HANDLE) -> CK_RV {
 #[no_mangle]
 pub unsafe extern "C" fn C_CloseAllSessions(slot: CK_SLOT_ID) -> CK_RV {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if slot != 1 {
-            return CKR_SLOT_ID_INVALID;
-        }
         state(|s| {
+            if slot != 1 {
+                return CKR_SLOT_ID_INVALID;
+            }
             s.sessions.clear();
             CKR_OK
         })
@@ -471,6 +478,9 @@ pub unsafe extern "C" fn C_GetAttributeValue(
         state(|s| {
             if !s.sessions.contains_key(&session) {
                 return CKR_SESSION_HANDLE_INVALID;
+            }
+            if !matches!(object, 1 | 2) && !(object == 3 && !s.remote.key.chain.is_empty()) {
+                return CKR_OBJECT_HANDLE_INVALID;
             }
             let mut result = CKR_OK;
             for i in 0..count as usize {
@@ -703,7 +713,10 @@ pub unsafe extern "C" fn C_SignUpdate(
                     h.update(bytes);
                     CKR_OK
                 }
-                Some(Operation::DigestInfo) => CKR_FUNCTION_NOT_SUPPORTED,
+                Some(Operation::DigestInfo) => {
+                    session.sign = None;
+                    CKR_FUNCTION_NOT_SUPPORTED
+                }
                 None => CKR_OPERATION_NOT_INITIALIZED,
             }
         })
@@ -717,6 +730,22 @@ pub unsafe extern "C" fn C_SignFinal(
     len: *mut CK_ULONG,
 ) -> CK_RV {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let supported = state(|s| {
+            let Some(session) = s.sessions.get_mut(&session) else {
+                return CKR_SESSION_HANDLE_INVALID;
+            };
+            match &session.sign {
+                Some(Operation::Hash(_)) => CKR_OK,
+                Some(Operation::DigestInfo) => {
+                    session.sign = None;
+                    CKR_FUNCTION_NOT_SUPPORTED
+                }
+                None => CKR_OPERATION_NOT_INITIALIZED,
+            }
+        });
+        if supported != CKR_OK {
+            return supported;
+        }
         sign(session, &[], out, len)
     }))
     .unwrap_or(CKR_GENERAL_ERROR)
