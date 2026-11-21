@@ -23,4 +23,5 @@ with tempfile.TemporaryDirectory(prefix="brigalow-release-test-") as directory:
     subprocess.run(verify,check=True)
     (d/"dist/brigalow-linux.tar.gz").write_bytes(b"tampered payload")
     assert subprocess.run(verify,capture_output=True).returncode!=0
+    assert subprocess.run(["python3","-O",*verify[1:]],capture_output=True).returncode!=0
 print("Release packaging/SBOM and payload tamper rejection passed")

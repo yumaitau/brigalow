@@ -48,7 +48,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not hmac.compare_digest(supplied, expected):
                 raise ValueError()
             request = json.loads(body)
-            if request["version"] != 1 or request["digest_alg"] != "sha256" or abs(time.time() - request["at"]) > 60:
+            if (type(request["version"]) is not int or request["version"] != 1
+                    or request["digest_alg"] != "sha256"
+                    or type(request["at"]) not in (int, float)
+                    or abs(time.time() - request["at"]) > 60):
                 raise ValueError()
             # Bind response to this exact invocation; the client never accepts replayed replies.
             self.respond({"nonce": request["nonce"], "request": request["request"],
@@ -61,7 +64,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def serve(handler, cert, key, secret_file):
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    server.secret = pathlib.Path(secret_file).read_bytes().rstrip(b"\n")
+    server.secret = pathlib.Path(secret_file).read_bytes().removesuffix(b"\n").removesuffix(b"\r")
     if len(server.secret) < 32:
         raise ValueError("generated secret must contain at least 32 bytes")
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)

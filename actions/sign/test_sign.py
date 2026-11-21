@@ -16,7 +16,7 @@ class Wrapper(unittest.TestCase):
     def test_scoped_audience_environment_only_and_no_mint_credential_in_child(self):
         org = str(uuid.uuid4())
         credential, token = secrets.token_urlsafe(32), secrets.token_urlsafe(64)
-        env = {"BRIGALOW_INPUT_ORG": org, "ACTIONS_ID_TOKEN_REQUEST_URL": "https://oidc.example/token?audience=wrong",
+        env = {"BRIGALOW_INPUT_ORG": org, "ACTIONS_ID_TOKEN_REQUEST_URL": "https://oidc.example/token?audience=wrong&flag=",
                "ACTIONS_ID_TOKEN_REQUEST_TOKEN": credential, "BRIGALOW_BINARY": "/generated/brig",
                "BRIGALOW_INPUT_SERVER": "https://signer.example", "BRIGALOW_INPUT_PROJECT": str(uuid.uuid4()),
                "BRIGALOW_INPUT_POLICY": "release", "BRIGALOW_INPUT_OUTPUT": "artifact.sig",
@@ -26,7 +26,7 @@ class Wrapper(unittest.TestCase):
         with patch.object(action.urllib.request, "build_opener", return_value=client), patch.object(action.subprocess, "run") as run:
             action.sign(env)
         request = client.open.call_args.args[0]
-        self.assertEqual(urllib.parse.parse_qs(urllib.parse.urlsplit(request.full_url).query), {"audience": ["brigalow:" + org]})
+        self.assertEqual(urllib.parse.parse_qs(urllib.parse.urlsplit(request.full_url).query, keep_blank_values=True), {"audience": ["brigalow:" + org], "flag": [""]})
         self.assertEqual(request.headers["Authorization"], "Bearer " + credential)
         self.assertEqual(run.call_args.kwargs["env"]["BRIGALOW_TOKEN"], token)
         self.assertNotIn("ACTIONS_ID_TOKEN_REQUEST_TOKEN", run.call_args.kwargs["env"])

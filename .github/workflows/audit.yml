@@ -23,4 +23,4 @@ jobs:
       - name: Audit application and fuzz lockfiles (no advisory exceptions)
         run: |
           cargo audit --deny warnings
-          cargo audit --no-fetch --file fuzz/Cargo.lock --deny warnings
+          cargo audit --file fuzz/Cargo.lock --deny warnings

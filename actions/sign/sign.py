@@ -17,7 +17,7 @@ def sign(env):
     parts = urllib.parse.urlsplit(env["ACTIONS_ID_TOKEN_REQUEST_URL"])
     if parts.scheme != "https" or not parts.hostname or parts.username or parts.password or parts.fragment:
         raise ValueError("invalid OIDC endpoint")
-    query = [(k, v) for k, v in urllib.parse.parse_qsl(parts.query) if k != "audience"]
+    query = [(k, v) for k, v in urllib.parse.parse_qsl(parts.query, keep_blank_values=True) if k != "audience"]
     query.append(("audience", "brigalow:" + org))
     url = urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query)))
     client = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect(),

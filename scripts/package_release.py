@@ -25,7 +25,8 @@ sbom = dict(bomFormat="CycloneDX", specVersion="1.6", version=1, components=comp
 (a.output/"sbom.cdx.json").write_text(json.dumps(sbom, sort_keys=True, indent=2)+"\n")
 files = ["brig", "brigalow-server", "brigalow-ca", "brigalow-audit", "brigalow-admin", "libbrigalow_pkcs11.so"]
 for file in files:
-    assert (a.binaries/file).is_file(), f"missing Linux release artifact: {file}"
+    if not (a.binaries/file).is_file():
+        raise SystemExit(f"missing Linux release artifact: {file}")
 with tarfile.open(a.output/"brigalow-linux.tar.gz", "w:gz") as archive:
     for file in files:
         archive.add(a.binaries/file, arcname=file)
