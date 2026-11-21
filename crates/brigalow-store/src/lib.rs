@@ -88,10 +88,12 @@ impl Store {
         }
         // Refuse missing/old schema; migrations never run with application credentials.
         let mut connection = pool.acquire().await?;
-        if !schema_current(&mut connection).await? {
+        let current = schema_current(&mut connection).await?;
+        drop(connection);
+        if !current {
+            pool.close().await;
             return Err(Error::Database);
         }
-        drop(connection);
         Ok(Self { pool })
     }
     /// Only call with an organisation established by authenticated server-side identity.

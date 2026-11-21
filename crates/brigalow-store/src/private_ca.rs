@@ -41,6 +41,13 @@ impl CaStore {
             pool.close().await;
             return Err(Error::UnsafeRole);
         }
+        let mut connection = pool.acquire().await?;
+        let current = crate::schema_current(&mut connection).await?;
+        drop(connection);
+        if !current {
+            pool.close().await;
+            return Err(Error::Database);
+        }
         Ok(Self {
             tenant: Tenant { pool, org_id: org },
         })
@@ -74,11 +81,14 @@ impl CaStore {
             sqlx::query_scalar("SELECT floor(extract(epoch FROM clock_timestamp()))::bigint")
                 .fetch_one(&mut *tx)
                 .await?;
+        // Keep the MSB clear and non-zero so the 16-byte serial is a canonical positive ASN.1 INTEGER.
+        let mut serial = *Uuid::new_v4().as_bytes();
+        serial[0] = (serial[0] & 0x7f) | 0x01;
         let leaf = Leaf {
             profile,
             day: at / 86400,
             issuer,
-            serial: *Uuid::new_v4().as_bytes(),
+            serial,
             public_key,
             issued_at: at,
             chain: None,

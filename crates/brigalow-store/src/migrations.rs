@@ -8,13 +8,6 @@ use std::sync::LazyLock;
 pub static MIGRATOR: LazyLock<Migrator> = LazyLock::new(|| {
     Migrator::with_migrations(vec![
         Migration::new(
-            9,
-            "schema readiness".into(),
-            MigrationType::Simple,
-            include_str!("../migrations/0009_schema_readiness.sql").into_sql_str(),
-            false,
-        ),
-        Migration::new(
             1,
             "foundations".into(),
             MigrationType::Simple,
@@ -68,6 +61,13 @@ pub static MIGRATOR: LazyLock<Migrator> = LazyLock::new(|| {
             "audit checkpoints".into(),
             MigrationType::Simple,
             include_str!("../migrations/0008_audit_checkpoints.sql").into_sql_str(),
+            false,
+        ),
+        Migration::new(
+            9,
+            "schema readiness".into(),
+            MigrationType::Simple,
+            include_str!("../migrations/0009_schema_readiness.sql").into_sql_str(),
             false,
         ),
     ])

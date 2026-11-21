@@ -109,19 +109,26 @@ impl Tenant {
             gate_results: vec![],
             attestation: None,
         };
-        let row: Option<Option<Json<Policy>>> = sqlx::query_scalar(
-            "SELECT record FROM brigalow.policies WHERE org_id=$1 AND id=$2 AND project_id=$3",
+        let row: Option<(Uuid, Option<Json<Policy>>)> = sqlx::query_as(
+            "SELECT key_id, record FROM brigalow.policies WHERE org_id=$1 AND id=$2 AND project_id=$3",
         )
         .bind(self.org_id)
         .bind(request.submission.policy)
         .bind(project)
         .fetch_optional(&mut *tx)
         .await?;
-        if let Some(policy) = row.flatten() {
+        if let Some((key_id, Some(policy))) = row {
             let policy = policy.0;
-            let key:Option<Option<Json<KeyRecord>>>=sqlx::query_scalar("SELECT record FROM brigalow.signing_keys WHERE org_id=$1 AND id=$2 AND project_id=$3 FOR UPDATE").bind(self.org_id).bind(policy.key).bind(project).fetch_optional(&mut *tx).await?;
+            let key:Option<Option<Json<KeyRecord>>>=sqlx::query_scalar("SELECT record FROM brigalow.signing_keys WHERE org_id=$1 AND id=$2 AND project_id=$3 FOR UPDATE").bind(self.org_id).bind(key_id).bind(project).fetch_optional(&mut *tx).await?;
             if let Some(key) = key.flatten() {
-                request.failure = policy.authorise(&key.0, p, lab).err();
+                if policy.id != request.submission.policy
+                    || policy.project != project
+                    || policy.key != key_id
+                {
+                    request.failure = Some("key_binding".into());
+                } else {
+                    request.failure = policy.authorise(&key.0, p, lab).err();
+                }
                 request.key = Some(key.0);
             } else {
                 request.failure = Some("key_binding".into());

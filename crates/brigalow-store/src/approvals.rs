@@ -171,6 +171,12 @@ impl Tenant {
         }
         let now = Self::now(&mut tx).await?;
         let approval = request.approval.as_mut().ok_or(Error::Invalid)?;
+        if !p.allows(brigalow_core::rbac::Action::Approve)
+            || p.actor == approval.requester
+            || !approval.rule.approvers.contains(&p.actor)
+        {
+            return Err(Error::Forbidden);
+        }
         if approval.status(now) == Status::Expired {
             request.state = RequestState::Expired;
             self.persist_request(&mut tx, &request, "system", "request.expired")
@@ -201,11 +207,18 @@ impl Tenant {
             Status::Approved => {
                 let policy:Option<Option<Json<Policy>>>=sqlx::query_scalar("SELECT record FROM brigalow.policies WHERE org_id=$1 AND id=$2 AND project_id=$3").bind(self.org_id).bind(request.submission.policy).bind(request.project).fetch_optional(&mut *tx).await?;
                 let policy = policy.flatten().ok_or(Error::NotFound)?.0;
+                if serde_json::to_value(&policy).map_err(|_| Error::Invalid)?
+                    != serde_json::to_value(&request.policy).map_err(|_| Error::Invalid)?
+                {
+                    request.failure = Some("policy_changed".into());
+                }
                 let key:Option<Option<Json<KeyRecord>>>=sqlx::query_scalar("SELECT record FROM brigalow.signing_keys WHERE org_id=$1 AND id=$2 AND project_id=$3 FOR UPDATE").bind(self.org_id).bind(policy.key).bind(request.project).fetch_optional(&mut *tx).await?;
                 let key = key.flatten().ok_or(Error::NotFound)?.0;
-                request.failure = policy
-                    .authorise(&key, request.principal.as_ref().ok_or(Error::Invalid)?, lab)
-                    .err();
+                if request.failure.is_none() {
+                    request.failure = policy
+                        .authorise(&key, request.principal.as_ref().ok_or(Error::Invalid)?, lab)
+                        .err();
+                }
                 request.key = Some(key);
                 let gating = !policy.gates.is_empty();
                 request.policy = Some(policy);
